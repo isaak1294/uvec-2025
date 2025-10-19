@@ -828,8 +828,13 @@ class Interpreter {
     private env: Env = new Map<string, Value>();
     private svg = new SvgBuilder();
     private printSink: string[] = []; // for debugging or UI capture
+    // step counter to prevent infinite loops / runaway computation
+    private steps: number = 0;
+    private stepLimit: number = 5000000; // sensible default, can be overridden via run()
 
     run(stmts: Stmt[]): string {
+        // reset step counter for every run
+        this.steps = 0;
         for (const s of stmts) this.exec(s);
         // If user never called finish svg, auto-finish if started
         if (this.svg.started) return this.svg.finish();
@@ -837,6 +842,9 @@ class Interpreter {
     }
 
     private exec(stmt: Stmt): void {
+        // Check step budget on every statement execution
+        this.steps++;
+        if (this.steps > this.stepLimit) throw new RuntimeError(`Step limit exceeded (${this.stepLimit})`);
         switch (stmt.k) {
             case "VarDecl": {
                 const v = this.eval(stmt.expr);
@@ -923,6 +931,9 @@ class Interpreter {
             case "RepeatTimes": {
                 const n = Math.max(0, Math.floor(this.asNum(this.eval(stmt.count))));
                 for (let k = 1; k <= n; k++) {
+                    // per-iteration step check (extra safety)
+                    this.steps++;
+                    if (this.steps > this.stepLimit) throw new RuntimeError(`Step limit exceeded (${this.stepLimit})`);
                     if (stmt.asVar) this.env.set(stmt.asVar, k);
                     else this.env.set("it", k);
                     for (const inner of stmt.body) this.exec(inner);
@@ -957,10 +968,12 @@ class Interpreter {
                 // Thus update runs BEFORE body on each iteration, and loop stops when condition becomes true
                 const guard = () => this.truthy(this.eval(stmt.cond));
                 while (true) {
+                    // per-iteration step check
+                    this.steps++;
+                    if (this.steps > this.stepLimit) throw new RuntimeError(`Step limit exceeded (${this.stepLimit})`);
                     // run update
                     this.exec(stmt.update);
-                    // check condition — if now true, perform one body iteration and stop?
-                    // Spec says: "loop continues while condition is false".
+                    // check condition — if now true, stop before body
                     if (guard()) break;
                     for (const inner of stmt.body) this.exec(inner);
                 }
@@ -981,6 +994,9 @@ class Interpreter {
     }
 
     private eval(expr: Expr): Value {
+        // charge one step for evaluating an expression
+        this.steps++;
+        if (this.steps > this.stepLimit) throw new RuntimeError(`Step limit exceeded (${this.stepLimit})`);
         switch (expr.k) {
             case "Num": return expr.v;
             case "Str": return expr.v;
@@ -1097,11 +1113,12 @@ class Interpreter {
    Public API
 ======================= */
 
-export function compileAndRenderSVG(source: string): string {
+export function compileAndRenderSVG(source: string, opts?: { stepLimit?: number }): string {
     const lex = new Lexer(source);
     const toks = lex.tokenize();
     const parser = new Parser(toks);
     const program = parser.parseProgram();
     const interp = new Interpreter();
+    if (opts?.stepLimit !== undefined) (interp as any).stepLimit = opts.stepLimit;
     return interp.run(program);
 }
