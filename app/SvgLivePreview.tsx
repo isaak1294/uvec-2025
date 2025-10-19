@@ -56,15 +56,60 @@ finish svg`;
   useEffect(() => {
     let cancelled = false;
     const tid = setTimeout(() => {
-      try {
-        const svg = compileAndRenderSVG(langText);
-        if (!cancelled) {
-          setSvgText(svg);
-          setCompileError(null);
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setCompileError(e?.message ?? "Compile error");
+      // prefer running inside a Web Worker to avoid UI lockups
+      const stepLimit = 5000000; // tune as required
+      const timeoutMs = 2000;
+
+      if (window.Worker) {
+        const worker = new Worker('/svgWorker.js');
+        const id = Math.random().toString(36).slice(2);
+        let finished = false;
+
+        const to = window.setTimeout(() => {
+          if (!finished) {
+            worker.terminate();
+            if (!cancelled) setCompileError('Execution timed out');
+          }
+        }, timeoutMs);
+
+        worker.onmessage = (ev) => {
+          const m = ev.data;
+          if (m.id !== id) return;
+          finished = true;
+          clearTimeout(to);
+          worker.terminate();
+          if (!cancelled) {
+            if (m.ok) {
+              setSvgText(m.svg);
+              setCompileError(null);
+            } else {
+              // If worker couldn't find compileAndRenderSVG, fallback to synchronous compile
+              if (/(compileAndRenderSVG not available|not available in worker)/i.test(m.error || '')) {
+                try {
+                  const svg = compileAndRenderSVG(langText, { stepLimit });
+                  setSvgText(svg);
+                  setCompileError(null);
+                } catch (e: any) {
+                  setCompileError(e?.message ?? 'Compile error');
+                }
+              } else {
+                setCompileError(m.error || 'Compile error');
+              }
+            }
+          }
+        };
+
+        worker.postMessage({ type: 'compile', id, source: langText, stepLimit });
+      } else {
+        // fallback: synchronous compile with stepLimit to guard loops
+        try {
+          const svg = compileAndRenderSVG(langText, { stepLimit: 5000000 });
+          if (!cancelled) {
+            setSvgText(svg);
+            setCompileError(null);
+          }
+        } catch (e: any) {
+          if (!cancelled) setCompileError(e?.message ?? 'Compile error');
         }
       }
     }, 200);
