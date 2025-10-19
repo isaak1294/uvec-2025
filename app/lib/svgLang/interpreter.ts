@@ -9,6 +9,10 @@
   - Returns SVG string
 ---------------------------------------------------------*/
 
+/*
+AI Assisted
+*/
+
 type Num = number;
 type Str = string;
 type Bool = boolean;
