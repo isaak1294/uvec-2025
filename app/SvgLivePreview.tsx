@@ -6,20 +6,41 @@ import Link from "next/link";
 import { BookOpenText } from "lucide-react";
 
 export default function SvgLivePreview() {
-  const sampleLang = `start svg width 400 height 300
-use fill "cornflowerblue"
-use stroke "black" width 2
-
-let cell be 40
-repeat 5 times as row:
-  repeat 8 times as col:
-    circle at (col * cell + 20, row * cell + 20) radius 16
-  end
+  const sampleLang = `to fb(n):
+    if n % 15 == 0:
+        give back "FizzBuzz"
+    otherwise if n % 3 == 0:
+        give back "Fizz"
+    otherwise if n % 5 == 0:
+        give back "Buzz"
+    otherwise:
+        give back "" + n
+    end
 end
 
-let x be 0
-repeat x be x + 20 until x >= 200:
-  text "x=" + x at (x + 20, 280) size 12
+start svg width 600 height 650
+use fill "black"
+
+let cell be 60
+let x0 be 30
+let y0 be 40
+
+repeat 10 times as row:
+    repeat 10 times as col:
+        let n be (row - 1) * 10 + col
+
+        if n % 15 == 0:
+            use fill "purple"
+        otherwise if n % 3 == 0:
+            use fill "teal"
+        otherwise if n % 5 == 0:
+            use fill "orange"
+        otherwise:
+            use fill "black"
+        end
+
+        text fb(n) at (x0 + (col - 1) * cell, y0 + (row - 1) * cell) size 16
+    end
 end
 
 finish svg`;
@@ -173,7 +194,16 @@ finish svg`);
                   </Link>
                 </h1>
                 <div className="flex flex-col gap-2 mb-5">
-                  <button className="text-sm font-medium bg-red-500/90 hover:bg-red-500 text-white w-full py-2 rounded-lg transition-colors">
+                  <button
+                    onClick={() =>
+                      insertAtCursor(
+                        `if <condition>:
+    <statements>
+end`
+                      )
+                    }
+                    className="text-sm font-medium bg-red-500/90 hover:bg-red-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
                     If / Else
                   </button>
                 </div>
@@ -185,10 +215,25 @@ finish svg`);
                   </Link>
                 </h1>
                 <div className="flex flex-col gap-2 mb-5">
-                  <button className="text-sm font-medium bg-blue-500/90 hover:bg-blue-500 text-white w-full py-2 rounded-lg transition-colors">
+                  <button
+                    onClick={() =>
+                      insertAtCursor(`repeat <count> times:
+    <statements>
+end`)
+                    }
+                    className="text-sm font-medium bg-blue-500/90 hover:bg-blue-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
                     Repeat # Times
                   </button>
-                  <button className="text-sm font-medium bg-blue-500/90 hover:bg-blue-500 text-white w-full py-2 rounded-lg transition-colors">
+                  <button
+                    onClick={() =>
+                      insertAtCursor(`repeat <initialization> until <condition>:
+    <statements>
+end
+`)
+                    }
+                    className="text-sm font-medium bg-blue-500/90 hover:bg-blue-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
                     Repeat Until
                   </button>
                 </div>
@@ -200,7 +245,14 @@ finish svg`);
                   </Link>
                 </h1>
                 <div className="flex flex-col gap-2 mb-5">
-                  <button className="text-sm font-medium bg-purple-500/90 hover:bg-purple-500 text-white w-full py-2 rounded-lg transition-colors">
+                  <button
+                    onClick={() =>
+                      insertAtCursor(`to <name>([parameters]):
+    <statements>
+end`)
+                    }
+                    className="text-sm font-medium bg-purple-500/90 hover:bg-purple-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
                     Functions
                   </button>
                 </div>
