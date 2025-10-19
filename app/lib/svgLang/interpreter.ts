@@ -221,9 +221,10 @@ type Stmt =
     | { k: "Print", expr: Expr }
     | { k: "RepeatTimes", count: Expr, asVar?: string, body: Stmt[] }
     | { k: "RepeatUntil", update: Stmt, cond: Expr, body: Stmt[] }
+    | { k: "If", branches: { cond: Expr, body: Stmt[] }[], elseBody?: Stmt[] }
     | { k: "DrawCircle", x: Expr, y: Expr, r: Expr }
     | { k: "DrawRect", x: Expr, y: Expr, w: Expr, h: Expr }
-    | { k: "DrawLine", x1: Expr, y1: Expr, x2: Expr, y2: Expr }
+    | { k: "DrawLine", x: Expr, y: Expr, x2: Expr, y2: Expr }
     | { k: "DrawText", text: Expr, x: Expr, y: Expr, size?: Expr }
     | { k: "UseFill", color: Expr }
     | { k: "UseStroke", color: Expr, width: Expr }
@@ -231,6 +232,7 @@ type Stmt =
     | { k: "NoStroke" }
     | { k: "StartSvg", width: Expr, height: Expr }
     | { k: "FinishSvg" };
+
 
 type Expr =
     | { k: "Num", v: number }
@@ -416,6 +418,38 @@ class Parser {
             return { k: "DrawText", text: content, x, y, size };
         }
 
+        // if <cond> : block [ otherwise if <cond> : block ]* [ otherwise : block ] end
+        if (this.isKW(tok, KW.IF)) {
+            this.i++;
+            const branches: { cond: Expr, body: Stmt[] }[] = [];
+
+            // first branch
+            const firstCond = this.expression();
+            this.expect(TokType.Colon, "':' after if condition");
+            const firstBody = this.block();
+            branches.push({ cond: firstCond, body: firstBody });
+
+            // zero or more "otherwise if"
+            while (this.eatKW(KW.OTHERWISE)) {
+                if (this.eatKW(KW.IF)) {
+                    const cond = this.expression();
+                    this.expect(TokType.Colon, "':' after otherwise if condition");
+                    const body = this.block();
+                    branches.push({ cond, body });
+                } else {
+                    // plain "otherwise"
+                    this.expect(TokType.Colon, "':' after otherwise");
+                    const elseBody = this.block();
+                    this.expect(TokType.End, "to close 'if' block");
+                    return { k: "If", branches, elseBody };
+                }
+            }
+
+            this.expect(TokType.End, "to close 'if' block");
+            return { k: "If", branches };
+        }
+
+
         // repeat N times [as i]: ... end
         if (this.isKW(tok, KW.REPEAT)) {
             this.i++;
@@ -460,14 +494,21 @@ class Parser {
 
     private block(): Stmt[] {
         const out: Stmt[] = [];
-        while (this.peek().t !== TokType.End && this.peek().t !== TokType.EOF) {
-            // stop at 'end' (do not consume)
-            if (this.peek().t === TokType.Newline) { this.i++; continue; }
+        while (true) {
+            const tok = this.peek();
+            if (tok.t === TokType.EOF) break;
+            if (tok.t === TokType.Newline) { this.i++; continue; }
+
+            // IMPORTANT: stop the block when we reach "end" or "otherwise"
+            if (tok.t === TokType.End) break;
+            if (this.isKW(tok, KW.OTHERWISE)) break;
+
             out.push(this.statement());
             while (this.peek().t === TokType.Newline) this.i++;
         }
         return out;
     }
+
 
     private simpleUpdateStmt(): Stmt {
         // Only allow:
@@ -776,6 +817,18 @@ class Interpreter {
                     if (stmt.asVar) this.env.set(stmt.asVar, k);
                     else this.env.set("it", k);
                     for (const inner of stmt.body) this.exec(inner);
+                }
+                return;
+            }
+            case "If": {
+                for (const br of stmt.branches) {
+                    if (this.truthy(this.eval(br.cond))) {
+                        for (const inner of br.body) this.exec(inner);
+                        return;
+                    }
+                }
+                if (stmt.elseBody) {
+                    for (const inner of stmt.elseBody) this.exec(inner);
                 }
                 return;
             }
