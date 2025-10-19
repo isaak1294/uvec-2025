@@ -33,6 +33,8 @@ finish svg`;
   const [srcDoc, setSrcDoc] = useState<string>("");
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
+  const [leftPanelMode, setLeftPanelMode] = useState<"code" | "svg">("code");
+
   // Compile language → SVG (debounced)
   useEffect(() => {
     let cancelled = false;
@@ -84,66 +86,81 @@ finish svg`);
   }
 
   return (
-    <div className="h-screen w-screen grid grid-cols-3 gap-4 p-4 bg-gray-50">
+    <div className="h-screen w-screen grid grid-cols-2 gap-4 p-4 bg-gray-50">
       {/* Language editor */}
       <div className="flex flex-col rounded-2xl shadow p-3 bg-white">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-medium">Language Source</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={handleDownload}
-              className="px-3 py-1 rounded-lg border text-sm"
-              title="Download current SVG"
-            >
-              Download SVG
-            </button>
-            <button
-              onClick={handleClear}
-              className="px-3 py-1 rounded-lg border text-sm"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
+        {leftPanelMode == "code" ? (
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-medium">Language Source</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDownload}
+                  className="px-3 py-1 rounded-lg border text-sm"
+                  title="Download current SVG"
+                >
+                  Download SVG
+                </button>
+                <button
+                  onClick={handleClear}
+                  className="px-3 py-1 rounded-lg border text-sm"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setLeftPanelMode("svg")}
+                  className="px-3 py-1 rounded-lg text-gray-500 hover:text-black text-sm"
+                >
+                  View Svg
+                </button>
+              </div>
+            </div>
 
-        <textarea
-          value={langText}
-          onChange={(e) => setLangText(e.target.value)}
-          className="flex-1 resize-none w-full p-3 rounded-md border font-mono text-sm leading-relaxed outline-none"
-          style={{ minHeight: 0 }}
-        />
+            <textarea
+              value={langText}
+              onChange={(e) => setLangText(e.target.value)}
+              className="flex-1 resize-none w-full p-3 rounded-md border font-mono text-sm leading-relaxed outline-none"
+              style={{ minHeight: 0 }}
+            />
 
-        <p className="mt-2 text-xs text-gray-500">
-          Write programs in your natural-language syntax. The result compiles to
-          SVG automatically.
-        </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Write programs in your natural-language syntax. The result
+              compiles to SVG automatically.
+            </p>
 
-        {compileError && (
-          <div className="mt-2 text-sm text-red-600 border border-red-200 bg-red-50 rounded-md p-2">
-            {compileError}
-          </div>
+            {compileError && (
+              <div className="mt-2 text-sm text-red-600 border border-red-200 bg-red-50 rounded-md p-2">
+                {compileError}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-medium">Generated SVG</h2>
+              <div className="text-sm text-gray-500">
+                {hasSvgTag ? "Valid <svg> detected" : "No <svg> root found"}
+              </div>
+              <button
+                onClick={() => setLeftPanelMode("code")}
+                className="px-3 py-1 rounded-lg text-gray-500 hover:text-black text-sm"
+              >
+                View Code
+              </button>
+            </div>
+
+            <textarea
+              value={svgText}
+              onChange={(e) => setSvgText(e.target.value)}
+              className="flex-1 resize-none w-full p-3 rounded-md border font-mono text-sm leading-relaxed outline-none"
+              style={{ minHeight: 0 }}
+            />
+
+            <p className="mt-2 text-xs text-gray-500">
+              You can tweak the SVG markup here directly if desired.
+            </p>
+          </>
         )}
-      </div>
-
-      {/* SVG source (generated, but editable) */}
-      <div className="flex flex-col rounded-2xl shadow p-3 bg-white">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-medium">Generated SVG</h2>
-          <div className="text-sm text-gray-500">
-            {hasSvgTag ? "Valid <svg> detected" : "No <svg> root found"}
-          </div>
-        </div>
-
-        <textarea
-          value={svgText}
-          onChange={(e) => setSvgText(e.target.value)}
-          className="flex-1 resize-none w-full p-3 rounded-md border font-mono text-sm leading-relaxed outline-none"
-          style={{ minHeight: 0 }}
-        />
-
-        <p className="mt-2 text-xs text-gray-500">
-          You can tweak the SVG markup here directly if desired.
-        </p>
       </div>
 
       {/* Iframe preview */}
