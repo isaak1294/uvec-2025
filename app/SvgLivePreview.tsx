@@ -1,11 +1,11 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { compileAndRenderSVG } from "./lib/svgLang/interpreter";
+import Link from "next/link";
 
 import { BookOpenText } from "lucide-react";
 
 export default function SvgLivePreview() {
-  // --- Sample program in your language ---
   const sampleLang = `start svg width 400 height 300
 use fill "cornflowerblue"
 use stroke "black" width 2
@@ -129,12 +129,9 @@ finish svg`);
               <div className="border rounded-2xl p-5 shadow-sm bg-white w-64">
                 <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
                   Draw
-                  <BookOpenText
-                    className="hover:text-green-600 transition-colors cursor-pointer"
-                    onClick={() => {
-                      alert("open doc");
-                    }}
-                  />
+                  <Link href="/documentation/draw">
+                    <BookOpenText className="hover:text-green-600 transition-colors cursor-pointer" />
+                  </Link>
                 </h1>
                 <div className="flex flex-col gap-2 mb-5">
                   <button
@@ -171,12 +168,9 @@ finish svg`);
 
                 <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
                   Conditionals
-                  <BookOpenText
-                    className="hover:text-red-600 transition-colors cursor-pointer"
-                    onClick={() => {
-                      alert("open doc");
-                    }}
-                  />
+                  <Link href="/documentation/conditionals">
+                    <BookOpenText className="hover:text-red-600 transition-colors cursor-pointer" />
+                  </Link>
                 </h1>
                 <div className="flex flex-col gap-2 mb-5">
                   <button className="text-sm font-medium bg-red-500/90 hover:bg-red-500 text-white w-full py-2 rounded-lg transition-colors">
@@ -186,12 +180,9 @@ finish svg`);
 
                 <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
                   Loops
-                  <BookOpenText
-                    className="hover:text-blue-600 transition-colors cursor-pointer"
-                    onClick={() => {
-                      alert("open doc");
-                    }}
-                  />
+                  <Link href="/documentation/loops">
+                    <BookOpenText className="hover:text-blue-600 transition-colors cursor-pointer" />
+                  </Link>
                 </h1>
                 <div className="flex flex-col gap-2 mb-5">
                   <button className="text-sm font-medium bg-blue-500/90 hover:bg-blue-500 text-white w-full py-2 rounded-lg transition-colors">
@@ -204,17 +195,26 @@ finish svg`);
 
                 <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
                   Functions
-                  <BookOpenText
-                    className="hover:text-purple-600 transition-colors cursor-pointer"
-                    onClick={() => {
-                      alert("open doc");
-                    }}
-                  />
+                  <Link href="/documentation/functions">
+                    <BookOpenText className="hover:text-purple-600 transition-colors cursor-pointer" />
+                  </Link>
                 </h1>
                 <div className="flex flex-col gap-2 mb-5">
                   <button className="text-sm font-medium bg-purple-500/90 hover:bg-purple-500 text-white w-full py-2 rounded-lg transition-colors">
                     Functions
                   </button>
+                </div>
+                <div className="pt-5 flex flex-col gap-2">
+                  <Link href="/documentation/styles">
+                    <p className="text-xs hover:text-black text-gray-500 transition-colors underline inline">
+                      Learn About Colors and Styles
+                    </p>
+                  </Link>
+                  <Link href="/documentation/variables">
+                    <p className="text-xs hover:text-black text-gray-500 transition-colors underline inline">
+                      Learn About Variable Binding
+                    </p>
+                  </Link>
                 </div>
               </div>
               <textarea
