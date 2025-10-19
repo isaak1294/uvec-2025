@@ -96,8 +96,8 @@ finish svg`);
   }
 
   return (
-    <div className="h-screen w-screen grid grid-cols-3 gap-4 p-4 bg-gray-50">
-      <div className="flex flex-col rounded-2xl shadow p-3 col-span-2 bg-white">
+    <div className="h-screen w-screen grid grid-cols-2 gap-4 p-4 bg-gray-50">
+      <div className="flex flex-col rounded-2xl shadow p-3  bg-white">
         {leftPanelMode == "code" ? (
           <>
             <div className="flex items-center justify-between mb-2">
@@ -266,7 +266,7 @@ finish svg`);
         )}
       </div>
 
-      <div className="flex flex-col rounded-2xl shadow p-3 bg-white">
+      <div className="flex flex-col rounded-2xl shadow p-3 bg-white ">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-medium">Preview</h2>
           <div className="text-sm text-gray-500">
