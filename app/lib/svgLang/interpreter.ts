@@ -12,13 +12,20 @@
 type Num = number;
 type Str = string;
 type Bool = boolean;
-type Value = Num | Str | Bool | null;
+type Value = number | string | boolean | null | { __fn: FnDef }; // ← add function
+type FnParam = { name: string; default?: Expr };
+type FnDef = { params: FnParam[]; body: Stmt[]; closure: Env };
 
 function isNumber(v: Value): v is number { return typeof v === "number"; }
 function isString(v: Value): v is string { return typeof v === "string"; }
 function isBool(v: Value): v is boolean { return typeof v === "boolean"; }
 
 class RuntimeError extends Error { }
+class ReturnSignal extends Error {
+    constructor(public value: Value) {
+        super("return");
+    }
+}
 
 enum TokType {
     Number, String, Ident,
@@ -44,6 +51,8 @@ const KW = {
     SET: "set",
     TO: "to",
     IF: "if",
+    GIVE: "give",
+    BACK: "back",
     OTHERWISE: "otherwise",
     END: "end",
     REPEAT: "repeat",
@@ -73,7 +82,8 @@ const KW = {
     CIRCLE: "circle",
     TEXT: "text",
     SIZE: "size",
-    PRINT: "print"
+    PRINT: "print",
+    RETURN: "return",
 };
 
 type Kw = keyof typeof KW;
@@ -215,6 +225,11 @@ class Lexer {
    AST Nodes (minimal set)
 ======================= */
 
+function isFn(v: Value): v is { __fn: FnDef } {
+    return typeof v === "object" && v !== null && "__fn" in v;
+}
+
+// Stmt additions
 type Stmt =
     | { k: "VarDecl", name: string, expr: Expr }
     | { k: "Assign", name: string, expr: Expr }
@@ -222,9 +237,11 @@ type Stmt =
     | { k: "RepeatTimes", count: Expr, asVar?: string, body: Stmt[] }
     | { k: "RepeatUntil", update: Stmt, cond: Expr, body: Stmt[] }
     | { k: "If", branches: { cond: Expr, body: Stmt[] }[], elseBody?: Stmt[] }
+    | { k: "FnDef", name: string, params: FnParam[], body: Stmt[] }
+    | { k: "Return", expr?: Expr }
     | { k: "DrawCircle", x: Expr, y: Expr, r: Expr }
     | { k: "DrawRect", x: Expr, y: Expr, w: Expr, h: Expr }
-    | { k: "DrawLine", x: Expr, y: Expr, x2: Expr, y2: Expr }
+    | { k: "DrawLine", x1: Expr, y1: Expr, x2: Expr, y2: Expr }
     | { k: "DrawText", text: Expr, x: Expr, y: Expr, size?: Expr }
     | { k: "UseFill", color: Expr }
     | { k: "UseStroke", color: Expr, width: Expr }
@@ -233,15 +250,17 @@ type Stmt =
     | { k: "StartSvg", width: Expr, height: Expr }
     | { k: "FinishSvg" };
 
-
+// Expr additions
 type Expr =
     | { k: "Num", v: number }
     | { k: "Str", v: string }
     | { k: "Bool", v: boolean }
     | { k: "Var", name: string }
+    | { k: "Call", callee: string, args: { name?: string, expr: Expr }[] } // ← new
     | { k: "Unary", op: "neg" | "not", right: Expr }
     | { k: "Binary", op: string, left: Expr, right: Expr }
     | { k: "Group", inner: Expr };
+
 
 /* =======================
    Parser (recursive descent)
@@ -271,6 +290,45 @@ class Parser {
     private expectKW(kw: string, msg: string) {
         if (!this.eatKW(kw)) throw new RuntimeError(`Parse error: expected '${kw}' ${msg} at ${this.peek().line}:${this.peek().col}`);
     }
+    private parseParamList(): FnParam[] {
+        this.expect(TokType.LParen, "after function name");
+        const params: FnParam[] = [];
+        if (this.peek().t !== TokType.RParen) {
+            while (true) {
+                const nameTok = this.expect(TokType.Ident, "parameter name");
+                let def: Expr | undefined;
+                if (this.match(TokType.Assign)) {          // support default: a = 0
+                    def = this.expression();
+                }
+                params.push({ name: nameTok.v!, default: def });
+                if (!this.match(TokType.Comma)) break;
+            }
+        }
+        this.expect(TokType.RParen, "closing ')'");
+        return params;
+    }
+    private parseArgList(): { name?: string, expr: Expr }[] {
+        this.expect(TokType.LParen, "after function name");
+        const args: { name?: string, expr: Expr }[] = [];
+        if (this.peek().t !== TokType.RParen) {
+            while (true) {
+                // named arg?  name = expr
+                if (this.peek().t === TokType.Ident && this.toks[this.i + 1]?.t === TokType.Assign) {
+                    const nameTok = this.toks[this.i++]; // ident
+                    this.i++; // '='
+                    const expr = this.expression();
+                    args.push({ name: nameTok.v!, expr });
+                } else {
+                    args.push({ expr: this.expression() });
+                }
+                if (!this.match(TokType.Comma)) break;
+            }
+        }
+        this.expect(TokType.RParen, "closing ')'");
+        return args;
+    }
+
+
 
     parseProgram(): Stmt[] {
         const stmts: Stmt[] = [];
@@ -417,6 +475,31 @@ class Parser {
             }
             return { k: "DrawText", text: content, x, y, size };
         }
+
+        // to <name>(params): block end
+        if (this.isKW(this.peek(), KW.TO)) {
+            // disambiguate from 'set x to ...': here 'to' must be at statement start and followed by IDENT '('
+            this.i++;
+            const nameTok = this.expect(TokType.Ident, "function name after 'to'");
+            // require '(' next to ensure it's a function def
+            const params = this.parseParamList();
+            this.expect(TokType.Colon, "':' after function header");
+            const body = this.block();
+            this.expect(TokType.End, "to close function");
+            return { k: "FnDef", name: nameTok.v!, params, body };
+        }
+
+        // give back [expr]
+        if (this.isKW(this.peek(), "give")) { // support two-word keyword "give back"
+            this.i++;
+            this.expectKW("back", "after 'give'");
+            let expr: Expr | undefined;
+            if (this.peek().t !== TokType.Newline && this.peek().t !== TokType.End) {
+                expr = this.expression();
+            }
+            return { k: "Return", expr };
+        }
+
 
         // if <cond> : block [ otherwise if <cond> : block ]* [ otherwise : block ] end
         if (this.isKW(tok, KW.IF)) {
@@ -638,7 +721,16 @@ class Parser {
         if (tok.t === TokType.String) { this.i++; return { k: "Str", v: tok.v ?? "" }; }
         if (this.isKW(tok, KW.TRUE)) { this.i++; return { k: "Bool", v: true }; }
         if (this.isKW(tok, KW.FALSE)) { this.i++; return { k: "Bool", v: false }; }
-        if (tok.t === TokType.Ident) { this.i++; return { k: "Var", name: tok.v! }; }
+        if (tok.t === TokType.Ident) {
+            this.i++;
+            // call?
+            if (this.peek().t === TokType.LParen) {
+                const args = this.parseArgList();
+                return { k: "Call", callee: tok.v!, args };
+            }
+            return { k: "Var", name: tok.v! };
+        }
+
         if (this.match(TokType.LParen)) {
             const inner = this.expression();
             this.expect(TokType.RParen, "closing ')'");
@@ -653,6 +745,24 @@ class Parser {
 ======================= */
 
 type Env = Map<string, Value>;
+function childEnv(parent: Env): Env {
+    const e = new Map<string, Value>();
+    // Keep a back-reference to parent via a hidden key
+    (e as any).__parent = parent;
+    return e;
+}
+function getEnv(env: Env, name: string): Value | undefined {
+    if (env.has(name)) return env.get(name);
+    const p = (env as any).__parent as Env | undefined;
+    return p ? getEnv(p, name) : undefined;
+}
+function setEnv(env: Env, name: string, v: Value): void {
+    if (env.has(name)) { env.set(name, v); return; }
+    const p = (env as any).__parent as Env | undefined;
+    if (p) return setEnv(p, name, v);
+    env.set(name, v); // define at top if not found (or throw; your call)
+}
+
 
 class SvgState {
     fill: string | null = "black";
@@ -730,13 +840,12 @@ class Interpreter {
         switch (stmt.k) {
             case "VarDecl": {
                 const v = this.eval(stmt.expr);
-                this.env.set(stmt.name, v);
+                this.env.set(stmt.name, v); // always defines in current env
                 return;
             }
             case "Assign": {
-                if (!this.env.has(stmt.name)) throw new RuntimeError(`Undefined variable '${stmt.name}'`);
                 const v = this.eval(stmt.expr);
-                this.env.set(stmt.name, v);
+                setEnv(this.env, stmt.name, v); // assign to nearest ancestor env
                 return;
             }
             case "Print": {
@@ -832,6 +941,17 @@ class Interpreter {
                 }
                 return;
             }
+            case "FnDef": {
+                const def: FnDef = { params: stmt.params, body: stmt.body, closure: this.env };
+                // store function as a value in current env
+                this.env.set(stmt.name, { __fn: def });
+                return;
+            }
+
+            case "Return": {
+                const val = stmt.expr ? this.eval(stmt.expr) : null;
+                throw new ReturnSignal(val);
+            }
             case "RepeatUntil": {
                 // semantics: do { update; body } while (!cond)
                 // Thus update runs BEFORE body on each iteration, and loop stops when condition becomes true
@@ -866,9 +986,66 @@ class Interpreter {
             case "Str": return expr.v;
             case "Bool": return expr.v;
             case "Var": {
-                if (!this.env.has(expr.name)) throw new RuntimeError(`Undefined variable '${expr.name}'`);
-                return this.env.get(expr.name)!;
+                const v = getEnv(this.env, expr.name);
+                if (typeof v === "undefined") throw new RuntimeError(`Undefined variable '${expr.name}'`);
+                return v!;
             }
+
+            case "Call": {
+                const calleeVal = getEnv(this.env, expr.callee);
+                if (typeof calleeVal === "undefined") throw new RuntimeError(`Undefined function '${expr.callee}'`);
+                if (!isFn(calleeVal)) throw new RuntimeError(`'${expr.callee}' is not a function`);
+
+                const { params, body, closure } = calleeVal.__fn;
+
+                // Build call env: closure → call frame
+                const callEnv = childEnv(closure);
+
+                // Bind positional args
+                let pos = 0;
+                for (const arg of expr.args) {
+                    if (!arg.name) {
+                        if (pos >= params.length) throw new RuntimeError(`Too many arguments to ${expr.callee}`);
+                        const p = params[pos++];
+                        callEnv.set(p.name, this.eval(arg.expr));
+                    }
+                }
+
+                // Apply defaults for remaining params
+                for (let i = pos; i < params.length; i++) {
+                    const p = params[i];
+                    if (p.default !== undefined) callEnv.set(p.name, this.eval(p.default));
+                }
+
+                // Bind named args (override positional/defaults)
+                for (const arg of expr.args) {
+                    if (arg.name) {
+                        const p = params.find(pp => pp.name === arg.name);
+                        if (!p) throw new RuntimeError(`Unknown parameter '${arg.name}' for ${expr.callee}`);
+                        callEnv.set(p.name, this.eval(arg.expr));
+                    }
+                }
+
+                // Check all params bound
+                for (const p of params) {
+                    if (typeof callEnv.get(p.name) === "undefined")
+                        throw new RuntimeError(`Missing argument '${p.name}' for ${expr.callee}`);
+                }
+
+                // Execute body with new env
+                const prevEnv = this.env;
+                this.env = callEnv;
+                try {
+                    for (const s of body) this.exec(s);
+                    return null; // no return value
+                } catch (r) {
+                    if (r instanceof ReturnSignal) return r.value;
+                    throw r;
+                } finally {
+                    this.env = prevEnv;
+                }
+            }
+
             case "Group": return this.eval(expr.inner);
             case "Unary": {
                 const r = this.eval(expr.right);
