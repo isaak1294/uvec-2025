@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { compileAndRenderSVG } from "./lib/svgLang/interpreter";
 
+import { BookOpenText } from "lucide-react";
+
 export default function SvgLivePreview() {
   // --- Sample program in your language ---
   const sampleLang = `start svg width 400 height 300
@@ -22,20 +24,14 @@ end
 
 finish svg`;
 
-  // --- Left editor: your language ---
   const [langText, setLangText] = useState<string>(sampleLang);
-
-  // --- Middle/Right editor: generated SVG (editable if user wants to tweak) ---
   const [svgText, setSvgText] = useState<string>("");
   const [compileError, setCompileError] = useState<string | null>(null);
-
-  // --- Iframe preview doc ---
   const [srcDoc, setSrcDoc] = useState<string>("");
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-
   const [leftPanelMode, setLeftPanelMode] = useState<"code" | "svg">("code");
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Compile language → SVG (debounced)
   useEffect(() => {
     let cancelled = false;
     const tid = setTimeout(() => {
@@ -57,17 +53,18 @@ finish svg`;
     };
   }, [langText]);
 
-  // When svgText changes, update iframe srcDoc
   useEffect(() => {
     setSrcDoc(wrapSvgForIframe(svgText));
   }, [svgText]);
 
   const hasSvgTag = useMemo(() => /<svg[\s>]/i.test(svgText), [svgText]);
 
+  //AI GENERATED
   function wrapSvgForIframe(svg: string) {
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#fff;">${svg}</body></html>`;
   }
 
+  //AI GENERATED
   function handleDownload() {
     const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -85,10 +82,22 @@ finish svg`;
 finish svg`);
   }
 
+  function insertAtCursor(text: string) {
+    const textarea = textAreaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+
+    const newValue =
+      textarea.value.substring(0, start) + text + textarea.value.substring(end);
+
+    textarea.value = newValue;
+  }
+
   return (
-    <div className="h-screen w-screen grid grid-cols-2 gap-4 p-4 bg-gray-50">
-      {/* Language editor */}
-      <div className="flex flex-col rounded-2xl shadow p-3 bg-white">
+    <div className="h-screen w-screen grid grid-cols-3 gap-4 p-4 bg-gray-50">
+      <div className="flex flex-col rounded-2xl shadow p-3 col-span-2 bg-white">
         {leftPanelMode == "code" ? (
           <>
             <div className="flex items-center justify-between mb-2">
@@ -116,12 +125,106 @@ finish svg`);
               </div>
             </div>
 
-            <textarea
-              value={langText}
-              onChange={(e) => setLangText(e.target.value)}
-              className="flex-1 resize-none w-full p-3 rounded-md border font-mono text-sm leading-relaxed outline-none"
-              style={{ minHeight: 0 }}
-            />
+            <div className="flex h-full gap-8">
+              <div className="border rounded-2xl p-5 shadow-sm bg-white w-64">
+                <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
+                  Draw
+                  <BookOpenText
+                    className="hover:text-green-600 transition-colors cursor-pointer"
+                    onClick={() => {
+                      alert("open doc");
+                    }}
+                  />
+                </h1>
+                <div className="flex flex-col gap-2 mb-5">
+                  <button
+                    onClick={() => insertAtCursor("circle at (x,y) radius r")}
+                    className="text-sm font-medium bg-green-500/90 hover:bg-green-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
+                    Circle
+                  </button>
+                  <button
+                    onClick={() =>
+                      insertAtCursor("rect at (x, y) width w height h")
+                    }
+                    className="text-sm font-medium bg-green-500/90 hover:bg-green-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
+                    Rectangle
+                  </button>
+                  <button
+                    onClick={() =>
+                      insertAtCursor("line from (x1, y1) to (x2, y2)")
+                    }
+                    className="text-sm font-medium bg-green-500/90 hover:bg-green-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
+                    Line
+                  </button>
+                  <button
+                    onClick={() =>
+                      insertAtCursor(`text "content" at (x, y) size s`)
+                    }
+                    className="text-sm font-medium bg-green-500/90 hover:bg-green-500 text-white w-full py-2 rounded-lg transition-colors"
+                  >
+                    Text
+                  </button>
+                </div>
+
+                <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
+                  Conditionals
+                  <BookOpenText
+                    className="hover:text-red-600 transition-colors cursor-pointer"
+                    onClick={() => {
+                      alert("open doc");
+                    }}
+                  />
+                </h1>
+                <div className="flex flex-col gap-2 mb-5">
+                  <button className="text-sm font-medium bg-red-500/90 hover:bg-red-500 text-white w-full py-2 rounded-lg transition-colors">
+                    If / Else
+                  </button>
+                </div>
+
+                <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
+                  Loops
+                  <BookOpenText
+                    className="hover:text-blue-600 transition-colors cursor-pointer"
+                    onClick={() => {
+                      alert("open doc");
+                    }}
+                  />
+                </h1>
+                <div className="flex flex-col gap-2 mb-5">
+                  <button className="text-sm font-medium bg-blue-500/90 hover:bg-blue-500 text-white w-full py-2 rounded-lg transition-colors">
+                    Repeat # Times
+                  </button>
+                  <button className="text-sm font-medium bg-blue-500/90 hover:bg-blue-500 text-white w-full py-2 rounded-lg transition-colors">
+                    Repeat Until
+                  </button>
+                </div>
+
+                <h1 className="text-xl font-semibold mb-3 text-gray-800 border-b border-gray-200 pb-2 flex gap-2">
+                  Functions
+                  <BookOpenText
+                    className="hover:text-purple-600 transition-colors cursor-pointer"
+                    onClick={() => {
+                      alert("open doc");
+                    }}
+                  />
+                </h1>
+                <div className="flex flex-col gap-2 mb-5">
+                  <button className="text-sm font-medium bg-purple-500/90 hover:bg-purple-500 text-white w-full py-2 rounded-lg transition-colors">
+                    Functions
+                  </button>
+                </div>
+              </div>
+              <textarea
+                ref={textAreaRef}
+                value={langText}
+                onChange={(e) => setLangText(e.target.value)}
+                className="flex-1 resize-none w-full p-3 rounded-2xl border font-mono text-sm leading-relaxed outline-none"
+                style={{ minHeight: 0 }}
+              />
+            </div>
 
             <p className="mt-2 text-xs text-gray-500">
               Write programs in your natural-language syntax. The result
@@ -163,7 +266,6 @@ finish svg`);
         )}
       </div>
 
-      {/* Iframe preview */}
       <div className="flex flex-col rounded-2xl shadow p-3 bg-white">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-medium">Preview</h2>
