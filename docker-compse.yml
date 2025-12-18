@@ -1,0 +1,15 @@
+services:
+  next-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nextjs_dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules # Prevents local node_modules from overwriting container ones
+      - /app/.next        # Prevents build cache conflicts
+    environment:
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true # Helps HMR work inside Docker on some systems
